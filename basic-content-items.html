@@ -7,16 +7,9 @@ Aspect that lets a component collective DOM content as list items.
 <link rel="import" href="../basic-aspect/basic-aspect.html">
 
 <script>
+window.Basic = window.Basic || {};
 
-/**
- * Fires when the items in the list change.
- *
- * @event items-changed
- */
-
-Polymer({
-
-  behaviors: [Basic.Aspect],
+window.Basic.ContentItems = {
 
   contribute: {
 
@@ -25,9 +18,7 @@ Polymer({
     },
 
     contentChanged: function() {
-      if (this.itemsChanged) {
-        this.itemsChanged();
-      }
+      this.collective.itemsChanged();
     },
 
     /**
@@ -38,22 +29,32 @@ Polymer({
      * @returns {Number} The index of the item, or -1 if not found.
      */
     indexOfItem: function(item) {
-      return this.items.indexOf(item);
+      return this.collective.items.indexOf(item);
     },
+
+    // Default implementation does nothing. This will typically be handled by
+    // other aspects in the collective.
+    itemAdded: function() {},
 
     itemsChanged: function() {
       // Perform per-item initialization.
-      this.items.forEach(function(item) {
+      this.collective.items.forEach(function(item) {
         if (!item._itemInitialized) {
-          this.itemAdded(item);
+          // BUG: If an aspect is assimilated after ContentItems, then all the
+          // items are already initialized, and the new aspect won't have an
+          // opportunity to do its own per-item initialization in itemAdded.
+          this.collective.itemAdded(item);
           item._itemInitialized = true;
         }
       }.bind(this));
 
-      var event = new CustomEvent('items-changed', {
-        bubbles: true
-      });
-      this.dispatchEvent(event);
+      var outermost = this.collective.outermostAttached;
+      if (outermost) {
+        var event = new CustomEvent('items-changed', {
+          bubbles: true
+        });
+        outermost.dispatchEvent(event);
+      }
     },
 
     /**
@@ -66,17 +67,35 @@ Polymer({
       // TODO: Memoize
       // TODO: Filter out auxiliary content.
       // TODO: property notifications so elements can bind to this property
-      return this.content;
+      return this.collective.content;
     }
 
+  }
+
+};
+
+
+/**
+ * Fires when the items in the list change.
+ *
+ * @event items-changed
+ */
+
+Polymer({
+
+  aspects: [Basic.ContentItems],
+
+  behaviors: [Basic.Aspect],
+
+  indexOfItem: function(item) {
+    return this.collective.indexOfItem(item);
   },
 
   is: 'basic-content-items',
 
-  // Default implementations do nothing. These will usually be overwritten by
-  // collective methods.
-  itemAdded: function() {},
-  itemsChanged: function() {}
+  get items() {
+    return this.collective.items;
+  }
 
 });
 </script>
